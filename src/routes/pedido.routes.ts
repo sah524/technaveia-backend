@@ -1,0 +1,12 @@
+import { Router } from 'express';
+import { listOrders, getOrder, createOrder, updateOrderStatus, cancelOrder, reviewOrder } from '../controllers/pedido.controller';
+import { authMiddleware } from '../middlewares/auth.middleware';
+const router = Router();
+router.use(authMiddleware);
+router.get('/',             listOrders);
+router.get('/:id',          getOrder);
+router.post('/',            createOrder);
+router.patch('/:id/status', updateOrderStatus);
+router.delete('/:id',       cancelOrder);
+router.post('/:id/review',  reviewOrder);
+export default router;

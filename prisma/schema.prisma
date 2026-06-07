@@ -1,0 +1,463 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────
+
+enum Role {
+  cliente
+  tecnico
+  admin
+}
+
+enum TipoPessoa {
+  pf
+  pj
+}
+
+enum StatusTecnico {
+  pendente
+  aprovado
+  suspenso
+  reprovado
+}
+
+enum Modalidade {
+  presencial
+  remoto
+  ambos
+}
+
+enum StatusPedido {
+  solicitado
+  aceito
+  andamento
+  concluido
+  cancelado
+  disputa
+}
+
+enum StatusOrcamento {
+  pendente
+  aceito
+  recusado
+  expirado
+}
+
+enum TipoItem {
+  mao_de_obra
+  peca
+  deslocamento
+}
+
+enum TipoMensagem {
+  text
+  image
+  budget
+  system
+}
+
+enum StatusPagamento {
+  pendente
+  aprovado
+  falhou
+  estornado
+}
+
+enum MetodoPagamento {
+  cartao_credito
+  cartao_debito
+  pix
+  boleto
+  saldo
+}
+
+enum StatusSaque {
+  processando
+  concluido
+  falhou
+}
+
+enum TipoConta {
+  corrente
+  poupanca
+  pix
+}
+
+// ─── Modelos ──────────────────────────────────────────────
+
+model Usuario {
+  id               String    @id @default(uuid())
+  nome             String
+  email            String    @unique
+  telefone         String?
+  cpf              String?   @unique
+  senha            String
+  foto             String?
+  role             Role      @default(cliente)
+  cidadeId         String?
+  cidade           Cidade?   @relation(fields: [cidadeId], references: [id])
+  ativo            Boolean   @default(true)
+  bloqueado        Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relações
+  tecnico          Tecnico?
+  pedidosCliente   Pedido[]        @relation("PedidosCliente")
+  avaliacoesFeitas Avaliacao[]     @relation("AvaliacoesCliente")
+  conversas        Participante[]
+  mensagens        Mensagem[]
+  notificacoes     Notificacao[]
+  tokens           RefreshToken[]
+  enderecos        Endereco[]      // ← relação adicionada
+
+  @@map("usuarios")
+}
+
+model Tecnico {
+  id               String        @id @default(uuid())
+  usuarioId        String        @unique
+  usuario          Usuario       @relation(fields: [usuarioId], references: [id])
+  tipoPessoa       TipoPessoa    @default(pf)
+  cnpj             String?       @unique
+  razaoSocial      String?
+  bio              String?
+  foto             String?
+  raioAtendimento  Int           @default(10)
+  modalidade       Modalidade    @default(presencial)
+  status           StatusTecnico @default(pendente)
+  avaliacao        Float         @default(0)
+  totalAvaliacoes  Int           @default(0)
+  taxaAceitacao    Float         @default(100)
+  verificado       Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  // Relações
+  especialidades   TecnicoEspecialidade[]
+  servicos         Servico[]
+  pedidos          Pedido[]        @relation("PedidosTecnico")
+  orcamentos       Orcamento[]
+  avaliacoes       Avaliacao[]     @relation("AvaliacoesTecnico")
+  documentos       Documento[]
+  contaBancaria    ContaBancaria?
+  transacoes       Transacao[]
+  saques           Saque[]
+  agendamentos     Agendamento[]
+
+  @@map("tecnicos")
+}
+
+model TecnicoEspecialidade {
+  id          String   @id @default(uuid())
+  tecnicoId   String
+  tecnico     Tecnico  @relation(fields: [tecnicoId], references: [id])
+  categoria   String
+
+  @@unique([tecnicoId, categoria])
+  @@map("tecnico_especialidades")
+}
+
+model Documento {
+  id        String   @id @default(uuid())
+  tecnicoId String
+  tecnico   Tecnico  @relation(fields: [tecnicoId], references: [id])
+  tipo      String   // doc_frente, doc_verso, selfie, comprovante, certificado, foto_perfil
+  url       String
+  createdAt DateTime @default(now())
+
+  @@map("documentos")
+}
+
+model ContaBancaria {
+  id        String     @id @default(uuid())
+  tecnicoId String     @unique
+  tecnico   Tecnico    @relation(fields: [tecnicoId], references: [id])
+  banco     String
+  tipoConta TipoConta  @default(pix)
+  chavePix  String?
+  agencia   String?
+  conta     String?
+  updatedAt DateTime   @updatedAt
+
+  @@map("contas_bancarias")
+}
+
+model Servico {
+  id               String     @id @default(uuid())
+  tecnicoId        String
+  tecnico          Tecnico    @relation(fields: [tecnicoId], references: [id])
+  nome             String
+  categoria        String
+  subcategoria     String?
+  descricao        String
+  modalidade       Modalidade @default(presencial)
+  tipoPreco        String     @default("fixo") // fixo, hora, consulta, a_partir_de
+  valor            Float?
+  tempoEstimado    Int?       // em minutos
+  garantiaDias     Int        @default(0)
+  ativo            Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@map("servicos")
+}
+
+model Endereco {
+  id          String   @id @default(uuid())
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id]) // ← relação adicionada
+  label       String   @default("Principal") // Casa, Trabalho etc
+  cep         String
+  rua         String
+  numero      String
+  complemento String?
+  bairro      String
+  cidade      String
+  estado      String
+  principal   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@map("enderecos")
+}
+
+model Pedido {
+  id              String       @id @default(uuid())
+  numero          String       @unique
+  clienteId       String
+  cliente         Usuario      @relation("PedidosCliente", fields: [clienteId], references: [id])
+  tecnicoId       String?
+  tecnico         Tecnico?     @relation("PedidosTecnico", fields: [tecnicoId], references: [id])
+  categoria       String
+  subcategoria    String
+  descricao       String
+  modalidade      Modalidade
+  endereco        String?
+  dataAgendada    DateTime?
+  isUrgente       Boolean      @default(false)
+  status          StatusPedido @default(solicitado)
+  valorEstimado   String?
+  valorFinal      Float?
+  fotosUrls       String[]
+  observacoes     String?
+  cupomId         String?
+  cupom           Cupom?       @relation(fields: [cupomId], references: [id]) // ← relação adicionada
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  // Relações
+  orcamentos      Orcamento[]
+  pagamento       Pagamento?
+  avaliacao       Avaliacao?
+  agendamento     Agendamento?
+  conversa        Conversa?
+
+  @@map("pedidos")
+}
+
+model Orcamento {
+  id              String          @id @default(uuid())
+  pedidoId        String
+  pedido          Pedido          @relation(fields: [pedidoId], references: [id])
+  tecnicoId       String
+  tecnico         Tecnico         @relation(fields: [tecnicoId], references: [id])
+  itens           ItemOrcamento[]
+  total           Float
+  desconto        Float           @default(0)
+  prazoExecucao   String
+  validade        DateTime
+  observacoes     String?
+  garantias       String?
+  status          StatusOrcamento @default(pendente)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@map("orcamentos")
+}
+
+model ItemOrcamento {
+  id          String    @id @default(uuid())
+  orcamentoId String
+  orcamento   Orcamento @relation(fields: [orcamentoId], references: [id])
+  descricao   String
+  tipo        TipoItem  @default(mao_de_obra)
+  valor       Float
+  quantidade  Int       @default(1)
+
+  @@map("itens_orcamento")
+}
+
+model Agendamento {
+  id          String   @id @default(uuid())
+  pedidoId    String   @unique
+  pedido      Pedido   @relation(fields: [pedidoId], references: [id])
+  tecnicoId   String
+  tecnico     Tecnico  @relation(fields: [tecnicoId], references: [id])
+  dataHora    DateTime
+  duracao     Int      @default(60) // minutos
+  status      String   @default("confirmado")
+  createdAt   DateTime @default(now())
+
+  @@map("agendamentos")
+}
+
+model Avaliacao {
+  id              String   @id @default(uuid())
+  pedidoId        String   @unique
+  pedido          Pedido   @relation(fields: [pedidoId], references: [id])
+  clienteId       String
+  cliente         Usuario  @relation("AvaliacoesCliente", fields: [clienteId], references: [id])
+  tecnicoId       String
+  tecnico         Tecnico  @relation("AvaliacoesTecnico", fields: [tecnicoId], references: [id])
+  nota            Int      // 1-5
+  pontualidade    Int?
+  qualidade       Int?
+  comunicacao     Int?
+  custobeneficio  Int?
+  comentario      String?
+  recomenda       Boolean  @default(true)
+  resposta        String?  // resposta do técnico
+  createdAt       DateTime @default(now())
+
+  @@map("avaliacoes")
+}
+
+model Pagamento {
+  id              String          @id @default(uuid())
+  pedidoId        String          @unique
+  pedido          Pedido          @relation(fields: [pedidoId], references: [id])
+  valor           Float
+  metodo          MetodoPagamento
+  status          StatusPagamento @default(pendente)
+  gatewayId       String?         // ID externo do gateway de pagamento
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@map("pagamentos")
+}
+
+model Transacao {
+  id           String   @id @default(uuid())
+  tecnicoId    String
+  tecnico      Tecnico  @relation(fields: [tecnicoId], references: [id])
+  pedidoId     String?
+  tipo         String   // credito, taxa, saque
+  valorBruto   Float
+  taxa         Float    @default(0)
+  valorLiquido Float
+  status       String   @default("pendente")
+  descricao    String?
+  createdAt    DateTime @default(now())
+
+  @@map("transacoes")
+}
+
+model Saque {
+  id          String      @id @default(uuid())
+  tecnicoId   String
+  tecnico     Tecnico     @relation(fields: [tecnicoId], references: [id])
+  valor       Float
+  status      StatusSaque @default(processando)
+  conta       String      // dados da conta no momento do saque
+  prazo       String      @default("1-3 dias úteis")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("saques")
+}
+
+model Conversa {
+  id            String         @id @default(uuid())
+  pedidoId      String?        @unique
+  pedido        Pedido?        @relation(fields: [pedidoId], references: [id])
+  participantes Participante[]
+  mensagens     Mensagem[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@map("conversas")
+}
+
+model Participante {
+  id          String   @id @default(uuid())
+  conversaId  String
+  conversa    Conversa @relation(fields: [conversaId], references: [id])
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+
+  @@unique([conversaId, usuarioId])
+  @@map("participantes")
+}
+
+model Mensagem {
+  id          String       @id @default(uuid())
+  conversaId  String
+  conversa    Conversa     @relation(fields: [conversaId], references: [id])
+  remetenteId String
+  remetente   Usuario      @relation(fields: [remetenteId], references: [id])
+  tipo        TipoMensagem @default(text)
+  conteudo    String
+  metadados   Json?
+  lida        Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+
+  @@map("mensagens")
+}
+
+model Notificacao {
+  id          String   @id @default(uuid())
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+  tipo        String
+  titulo      String
+  descricao   String
+  lida        Boolean  @default(false)
+  actionUrl   String?
+  createdAt   DateTime @default(now())
+
+  @@map("notificacoes")
+}
+
+model Cupom {
+  id          String   @id @default(uuid())
+  codigo      String   @unique
+  tipo        String   // percentual, fixo
+  valor       Float
+  minPedido   Float?
+  usos        Int      @default(0)
+  limite      Int
+  ativo       Boolean  @default(true)
+  validade    DateTime?
+  createdAt   DateTime @default(now())
+  pedidos     Pedido[] // ← relação adicionada
+
+  @@map("cupons")
+}
+
+model RefreshToken {
+  id          String   @id @default(uuid())
+  token       String   @unique
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model Cidade {
+  id        String    @id @default(uuid())
+  nome      String
+  uf        String
+  usuarios  Usuario[]
+
+  @@unique([nome, uf])
+  @@map("cidades")
+}

@@ -1,0 +1,12 @@
+import { Router } from 'express';
+import { getPendingTechnicians, approveTechnician, rejectTechnician, listUsers, toggleUserBlock, getDashboard } from '../controllers/admin.controller';
+import { authMiddleware, adminOnly } from '../middlewares/auth.middleware';
+const router = Router();
+router.use(authMiddleware, adminOnly);
+router.get('/dashboard',                 getDashboard);
+router.get('/technicians/pending',       getPendingTechnicians);
+router.patch('/technicians/:id/approve', approveTechnician);
+router.patch('/technicians/:id/reject',  rejectTechnician);
+router.get('/users',                     listUsers);
+router.patch('/users/:id/block',         toggleUserBlock);
+export default router;
