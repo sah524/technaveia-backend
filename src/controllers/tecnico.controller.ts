@@ -80,6 +80,26 @@ export async function getTechnicianReviews(req: Request, res: Response) {
   }
 }
 
+// ── GET /v1/technicians/me ─────────────────────────────────
+
+export async function getMyProfile(req: AuthRequest, res: Response) {
+  try {
+    const tecnico = await prisma.tecnico.findUnique({
+      where: { usuarioId: req.userId },
+      include: {
+        usuario: { select: { nome: true, foto: true, email: true, telefone: true } },
+        especialidades: true,
+      },
+    });
+
+    if (!tecnico) return res.status(404).json({ success: false, message: 'Perfil de técnico não encontrado' });
+
+    return res.json({ success: true, data: tecnico });
+  } catch {
+    return res.status(500).json({ success: false, message: 'Erro ao buscar perfil' });
+  }
+}
+
 // ── PUT /v1/technicians/me ────────────────────────────────
 
 export async function updateMyProfile(req: AuthRequest, res: Response) {

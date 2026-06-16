@@ -1,8 +1,9 @@
 import { Router } from 'express';
-import { searchTechnicians, getTechnician, getTechnicianReviews, updateMyProfile } from '../controllers/tecnico.controller';
+import { searchTechnicians, getTechnician, getTechnicianReviews, updateMyProfile, getMyProfile } from '../controllers/tecnico.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
 const router = Router();
 router.get('/',            searchTechnicians);
+router.get('/me',          authMiddleware, getMyProfile);
 router.get('/:id',         getTechnician);
 router.get('/:id/reviews', getTechnicianReviews);
 router.put('/me',          authMiddleware, updateMyProfile);
