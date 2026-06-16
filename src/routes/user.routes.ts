@@ -26,6 +26,24 @@ router.get("/me", async (req: AuthRequest, res: Response) => {
   }
 });
 
+router.get("/me/reviews", async (req: AuthRequest, res: Response) => {
+  try {
+    const reviews = await prisma.avaliacao.findMany({
+      where: { clienteId: req.userId },
+      include: {
+        pedido: { select: { categoria: true, subcategoria: true } },
+        tecnico: { include: { usuario: { select: { nome: true } } } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    return res.json({ success: true, data: reviews });
+  } catch {
+    return res
+      .status(500)
+      .json({ success: false, message: "Erro ao buscar avaliações" });
+  }
+});
+
 router.patch("/me", async (req: AuthRequest, res: Response) => {
   try {
     const { nome, telefone, foto } = req.body;
