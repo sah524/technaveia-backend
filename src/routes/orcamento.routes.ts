@@ -41,17 +41,28 @@ router.post("/", async (req: AuthRequest, res: Response) => {
         message: "Apenas técnicos podem enviar orçamentos",
       });
     }
+    if (!pedidoId || !itens?.length || !prazoExecucao) {
+      return res.status(400).json({
+        success: false,
+        message: "pedidoId, itens e prazoExecucao são obrigatórios",
+      });
+    }
     const total = itens.reduce(
       (acc: number, i: any) => acc + i.valor * i.quantidade,
       0,
     );
+    // validade padrão: 7 dias a partir de hoje se não fornecida
+    const validadeDate = validade
+      ? new Date(validade)
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
     const orcamento = await prisma.orcamento.create({
       data: {
         pedidoId,
         tecnicoId: tecnico.id,
         total,
         prazoExecucao,
-        validade: new Date(validade),
+        validade: validadeDate,
         observacoes,
         garantias,
         itens: { create: itens },
