@@ -100,6 +100,44 @@ export async function getMyProfile(req: AuthRequest, res: Response) {
   }
 }
 
+// ── GET /v1/technicians/:id/availability?date=YYYY-MM-DD ──
+// Retorna horários ocupados do técnico em uma data específica
+
+export async function getTechnicianAvailability(req: Request, res: Response) {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const dateStr = req.query.date as string;
+
+    if (!id) return res.status(400).json({ success: false, message: 'ID do técnico inválido' });
+    if (!dateStr) return res.status(400).json({ success: false, message: 'Parâmetro date obrigatório (YYYY-MM-DD)' });
+
+    // Busca pedidos desse técnico na data informada
+    const startOfDay = new Date(`${dateStr}T00:00:00`);
+    const endOfDay = new Date(`${dateStr}T23:59:59`);
+
+    const pedidos = await prisma.pedido.findMany({
+      where: {
+        tecnicoId: id,
+        status: { in: ['aceito', 'andamento', 'solicitado'] },
+        dataAgendada: { gte: startOfDay, lte: endOfDay },
+      },
+      select: { dataAgendada: true },
+    });
+
+    // Extrai horários ocupados (formato HH:MM)
+    const horariosOcupados = pedidos
+      .filter(p => p.dataAgendada)
+      .map(p => {
+        const d = new Date(p.dataAgendada!);
+        return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+      });
+
+    return res.json({ success: true, data: { date: dateStr, horariosOcupados } });
+  } catch {
+    return res.status(500).json({ success: false, message: 'Erro ao buscar disponibilidade' });
+  }
+}
+
 // ── PUT /v1/technicians/me ────────────────────────────────
 
 export async function updateMyProfile(req: AuthRequest, res: Response) {
