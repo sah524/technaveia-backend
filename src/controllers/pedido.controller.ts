@@ -25,18 +25,41 @@ function gerarNumeroPedido(): string {
 export async function listOrders(req: AuthRequest, res: Response) {
   try {
     const { status } = req.query;
-    const where: Record<string, unknown> = {};
+
+    let where: Record<string, unknown> = {};
 
     if (req.userRole === 'cliente') {
+      // Cliente só vê os próprios pedidos
       where.clienteId = req.userId;
     } else if (req.userRole === 'tecnico') {
       const tecnico = await prisma.tecnico.findUnique({ where: { usuarioId: req.userId } });
       if (!tecnico) return res.status(404).json({ success: false, message: 'Técnico não encontrado' });
-      where.tecnicoId = tecnico.id;
-    }
-    // admin pode ver todos (sem filtro adicional)
 
-    if (status) where.status = status;
+      // Técnico vê:
+      // 1. Pedidos atribuídos diretamente a ele
+      // 2. Pedidos sem técnico definido (pool aberto para qualquer técnico aceitar)
+      where = {
+        OR: [
+          { tecnicoId: tecnico.id },
+          { tecnicoId: null, status: 'solicitado' },
+        ],
+      };
+    }
+    // admin vê todos sem filtro
+
+    if (status) {
+      // Se já tem OR, aplica status dentro de cada condição
+      if (where.OR) {
+        where = {
+          AND: [
+            { OR: where.OR },
+            { status },
+          ],
+        };
+      } else {
+        where.status = status;
+      }
+    }
 
     const orders = await prisma.pedido.findMany({
       where,
@@ -135,6 +158,38 @@ export async function createOrder(req: AuthRequest, res: Response) {
     return res.status(201).json({ success: true, data: order });
   } catch {
     return res.status(500).json({ success: false, message: 'Erro ao criar pedido' });
+  }
+}
+
+// ── PATCH /v1/orders/:id/accept ──────────────────────────
+// Técnico aceita um pedido do pool (sem técnico definido) ou atribuído a ele
+
+export async function acceptOrder(req: AuthRequest, res: Response) {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+    const tecnico = await prisma.tecnico.findUnique({ where: { usuarioId: req.userId } });
+    if (!tecnico) return res.status(404).json({ success: false, message: 'Técnico não encontrado' });
+
+    const order = await prisma.pedido.findUnique({ where: { id } });
+    if (!order) return res.status(404).json({ success: false, message: 'Pedido não encontrado' });
+
+    // Só pode aceitar pedidos solicitados e sem técnico (pool) ou atribuídos a este técnico
+    if (order.status !== 'solicitado') {
+      return res.status(400).json({ success: false, message: 'Este pedido não está disponível para aceite' });
+    }
+    if (order.tecnicoId && order.tecnicoId !== tecnico.id) {
+      return res.status(403).json({ success: false, message: 'Este pedido foi atribuído a outro técnico' });
+    }
+
+    const updated = await prisma.pedido.update({
+      where: { id },
+      data: { status: 'aceito', tecnicoId: tecnico.id },
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch {
+    return res.status(500).json({ success: false, message: 'Erro ao aceitar pedido' });
   }
 }
 
