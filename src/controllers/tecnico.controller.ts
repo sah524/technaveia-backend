@@ -23,6 +23,7 @@ export async function searchTechnicians(req: Request, res: Response) {
       include: {
         usuario: { select: { nome: true, foto: true, email: true } },
         especialidades: true,
+        servicos: { where: { ativo: true }, select: { nome: true, categoria: true, valor: true } },
       },
       orderBy: { avaliacao: 'desc' },
     });
