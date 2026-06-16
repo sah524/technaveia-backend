@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { authMiddleware, AuthRequest } from "../middlewares/auth.middleware";
 import prisma from "../utils/prisma";
+import { createNotification } from "../utils/notify";
 
 const router = Router();
 router.use(authMiddleware);
@@ -69,6 +70,19 @@ router.post("/", async (req: AuthRequest, res: Response) => {
       },
       include: { itens: true },
     });
+
+    // Notifica o cliente que recebeu orçamento
+    const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId } });
+    if (pedido) {
+      await createNotification({
+        usuarioId: pedido.clienteId,
+        tipo: 'budget',
+        titulo: 'Novo orçamento recebido!',
+        descricao: `Total: R$ ${total.toFixed(2).replace('.', ',')} — Prazo: ${prazoExecucao}`,
+        actionUrl: `/budgets/${orcamento.id}`,
+      });
+    }
+
     return res.status(201).json({ success: true, data: orcamento });
   } catch {
     return res

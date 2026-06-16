@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import prisma from '../utils/prisma';
+import { createNotification } from '../utils/notify';
 
 // Tipagens locais
 interface AvaliacaoRecord {
@@ -155,6 +156,20 @@ export async function createOrder(req: AuthRequest, res: Response) {
       },
     });
 
+    // Notifica técnico se atribuído diretamente
+    if (tecnicoId) {
+      const tecnico = await prisma.tecnico.findUnique({ where: { id: tecnicoId } });
+      if (tecnico) {
+        await createNotification({
+          usuarioId: tecnico.usuarioId,
+          tipo: 'request',
+          titulo: 'Nova solicitação para você!',
+          descricao: `${categoria} - ${subcategoria}. Verifique e aceite o pedido.`,
+          actionUrl: `/orders/${order.id}`,
+        });
+      }
+    }
+
     return res.status(201).json({ success: true, data: order });
   } catch {
     return res.status(500).json({ success: false, message: 'Erro ao criar pedido' });
@@ -213,6 +228,15 @@ export async function acceptOrder(req: AuthRequest, res: Response) {
       });
     }
 
+    // Notifica o cliente que o técnico aceitou
+    await createNotification({
+      usuarioId: order.clienteId,
+      tipo: 'request',
+      titulo: 'Técnico aceitou seu pedido!',
+      descricao: `O pedido ${order.numero} foi aceito. Você já pode conversar com o técnico.`,
+      actionUrl: `/orders/${order.id}`,
+    });
+
     return res.json({ success: true, data: { ...updated, conversaId: conversa.id } });
   } catch {
     return res.status(500).json({ success: false, message: 'Erro ao aceitar pedido' });
@@ -253,6 +277,36 @@ export async function updateOrderStatus(req: AuthRequest, res: Response) {
       where: { id },
       data: { status, ...(valorFinal !== undefined && { valorFinal }) },
     });
+
+    // Notificações baseadas no novo status
+    const statusLabels: Record<string, string> = {
+      andamento: 'O serviço começou!',
+      concluido: 'Serviço concluído!',
+      cancelado: 'Pedido cancelado',
+    };
+    if (statusLabels[status]) {
+      // Notifica o cliente
+      await createNotification({
+        usuarioId: order.clienteId,
+        tipo: status === 'cancelado' ? 'system' : 'request',
+        titulo: statusLabels[status],
+        descricao: `O pedido ${order.numero} foi atualizado para: ${status}.`,
+        actionUrl: `/orders/${order.id}`,
+      });
+      // Notifica o técnico (se não foi ele que mudou)
+      if (order.tecnicoId) {
+        const tec = await prisma.tecnico.findUnique({ where: { id: order.tecnicoId } });
+        if (tec && tec.usuarioId !== req.userId) {
+          await createNotification({
+            usuarioId: tec.usuarioId,
+            tipo: 'request',
+            titulo: statusLabels[status],
+            descricao: `O pedido ${order.numero} foi atualizado para: ${status}.`,
+            actionUrl: `/orders/${order.id}`,
+          });
+        }
+      }
+    }
 
     return res.json({ success: true, data: updated });
   } catch {
