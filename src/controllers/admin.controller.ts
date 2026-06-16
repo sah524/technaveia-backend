@@ -63,7 +63,6 @@ export async function listUsers(req: AuthRequest, res: Response) {
 
     const users = await prisma.usuario.findMany({
       where: {
-        role: 'cliente',
         ...(status === 'bloqueado' && { bloqueado: true }),
         ...(status === 'ativo' && { bloqueado: false, ativo: true }),
         ...(query && {
@@ -76,7 +75,7 @@ export async function listUsers(req: AuthRequest, res: Response) {
       },
       select: {
         id: true, nome: true, email: true, cpf: true,
-        telefone: true, bloqueado: true, ativo: true,
+        telefone: true, bloqueado: true, ativo: true, role: true,
         createdAt: true, cidade: true,
         _count: { select: { pedidosCliente: true } },
       },
