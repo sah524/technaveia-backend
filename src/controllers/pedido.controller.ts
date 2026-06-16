@@ -169,9 +169,9 @@ export async function createOrder(req: AuthRequest, res: Response) {
         });
       }
     } else {
-      // Pool aberto: notifica todos os técnicos aprovados (limite 20 para não sobrecarregar)
+      // Pool aberto: notifica todos os técnicos (aprovados e pendentes)
       const tecnicos = await prisma.tecnico.findMany({
-        where: { status: 'aprovado' },
+        where: { status: { in: ['aprovado', 'pendente'] } },
         select: { usuarioId: true },
         take: 20,
       });
