@@ -45,4 +45,59 @@ router.post('/me/services', authMiddleware, async (req: AuthRequest, res: Respon
   }
 });
 
+// ── PUT /v1/technicians/me/services/:id ──────────────────
+router.put('/me/services/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const serviceId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const tecnico = await prisma.tecnico.findUnique({ where: { usuarioId: req.userId } });
+    if (!tecnico) return res.status(404).json({ success: false, message: 'Técnico não encontrado' });
+
+    const servico = await prisma.servico.findUnique({ where: { id: serviceId } });
+    if (!servico || servico.tecnicoId !== tecnico.id) {
+      return res.status(403).json({ success: false, message: 'Serviço não encontrado ou sem permissão' });
+    }
+
+    const { nome, categoria, subcategoria, descricao, modalidade, tipoPreco, valor, tempoEstimado, garantiaDias, ativo } = req.body;
+
+    const updated = await prisma.servico.update({
+      where: { id: serviceId },
+      data: {
+        ...(nome && { nome }),
+        ...(categoria && { categoria }),
+        ...(subcategoria !== undefined && { subcategoria }),
+        ...(descricao && { descricao }),
+        ...(modalidade && { modalidade }),
+        ...(tipoPreco && { tipoPreco }),
+        ...(valor !== undefined && { valor }),
+        ...(tempoEstimado !== undefined && { tempoEstimado }),
+        ...(garantiaDias !== undefined && { garantiaDias }),
+        ...(ativo !== undefined && { ativo }),
+      },
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch {
+    return res.status(500).json({ success: false, message: 'Erro ao atualizar serviço' });
+  }
+});
+
+// ── DELETE /v1/technicians/me/services/:id ────────────────
+router.delete('/me/services/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const serviceId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const tecnico = await prisma.tecnico.findUnique({ where: { usuarioId: req.userId } });
+    if (!tecnico) return res.status(404).json({ success: false, message: 'Técnico não encontrado' });
+
+    const servico = await prisma.servico.findUnique({ where: { id: serviceId } });
+    if (!servico || servico.tecnicoId !== tecnico.id) {
+      return res.status(403).json({ success: false, message: 'Serviço não encontrado ou sem permissão' });
+    }
+
+    await prisma.servico.delete({ where: { id: serviceId } });
+    return res.json({ success: true, message: 'Serviço removido' });
+  } catch {
+    return res.status(500).json({ success: false, message: 'Erro ao remover serviço' });
+  }
+});
+
 export default router;
