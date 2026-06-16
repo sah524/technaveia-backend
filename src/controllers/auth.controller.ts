@@ -31,11 +31,27 @@ function generateTokens(userId: string, role: string) {
 
 export async function register(req: Request, res: Response) {
   try {
-    const { nome, email, cpf, telefone, senha, role = 'cliente' } = req.body;
+    const {
+      nome, email, cpf, telefone, senha,
+      // Aceita tanto "tipo" (enviado pelo app) quanto "role" (legado)
+      // Valores válidos: 'tech' | 'client' | 'tecnico' | 'cliente' | 'admin'
+      tipo, role,
+      // Dados extras do técnico
+      especialidades, raioAtendimento, modalidade,
+      whatsapp, banco, tipoConta, chavePix, agencia, conta,
+      endereco,
+    } = req.body;
 
     if (!nome || !email || !senha) {
       return res.status(400).json({ success: false, message: 'Nome, e-mail e senha são obrigatórios' });
     }
+
+    // Normaliza o role: aceita 'tech'/'tecnico' como tecnico, 'client'/'cliente' como cliente
+    const rawRole = tipo ?? role ?? 'cliente';
+    const resolvedRole: 'cliente' | 'tecnico' | 'admin' =
+      rawRole === 'tech' || rawRole === 'tecnico' ? 'tecnico'
+      : rawRole === 'admin' ? 'admin'
+      : 'cliente';
 
     const exists = await prisma.usuario.findUnique({ where: { email } });
     if (exists) {
@@ -45,9 +61,60 @@ export async function register(req: Request, res: Response) {
     const senhaHash = await bcrypt.hash(senha, 10);
 
     const user = await prisma.usuario.create({
-      data: { nome, email, cpf, telefone, senha: senhaHash, role },
+      data: { nome, email, cpf, telefone, senha: senhaHash, role: resolvedRole },
       select: { id: true, nome: true, email: true, role: true, createdAt: true },
     });
+
+    // Se for técnico, cria o registro na tabela Tecnico com especialidades e conta bancária
+    if (resolvedRole === 'tecnico') {
+      const tecnico = await prisma.tecnico.create({
+        data: {
+          usuarioId: user.id,
+          raioAtendimento: raioAtendimento ?? 10,
+          modalidade: modalidade ?? 'presencial',
+          status: 'pendente',
+        },
+      });
+
+      // Salva especialidades
+      if (Array.isArray(especialidades) && especialidades.length > 0) {
+        await prisma.tecnicoEspecialidade.createMany({
+          data: especialidades.map((cat: string) => ({ tecnicoId: tecnico.id, categoria: cat })),
+          skipDuplicates: true,
+        });
+      }
+
+      // Salva dados bancários se fornecidos
+      if (banco || chavePix || agencia || conta) {
+        await prisma.contaBancaria.create({
+          data: {
+            tecnicoId: tecnico.id,
+            banco: banco ?? '',
+            tipoConta: tipoConta ?? 'pix',
+            chavePix: chavePix ?? null,
+            agencia: agencia ?? null,
+            conta: conta ?? null,
+          },
+        });
+      }
+    }
+
+    // Salva endereço se fornecido
+    if (endereco?.cep && endereco?.rua) {
+      await prisma.endereco.create({
+        data: {
+          usuarioId: user.id,
+          cep: endereco.cep,
+          rua: endereco.rua,
+          numero: endereco.numero ?? 's/n',
+          complemento: endereco.complemento ?? null,
+          bairro: endereco.bairro ?? '',
+          cidade: endereco.cidade ?? '',
+          estado: endereco.estado ?? '',
+          principal: true,
+        },
+      });
+    }
 
     const { token, refreshToken } = generateTokens(user.id, user.role);
 

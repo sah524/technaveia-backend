@@ -96,12 +96,22 @@ export async function createOrder(req: AuthRequest, res: Response) {
   try {
     const {
       categoria, subcategoria, descricao, modalidade,
-      endereco, dataAgendada, isUrgente, valorEstimado,
+      endereco, dataAgendada, horaAgendada, isUrgente, valorEstimado,
       fotosUrls, tecnicoId,
     } = req.body;
 
     if (!categoria || !subcategoria || !descricao || !modalidade) {
       return res.status(400).json({ success: false, message: 'Campos obrigatórios ausentes: categoria, subcategoria, descricao, modalidade' });
+    }
+
+    // Combina data e hora em um único DateTime se ambos fornecidos
+    let dataAgendadaFinal: Date | undefined;
+    if (dataAgendada) {
+      if (horaAgendada) {
+        dataAgendadaFinal = new Date(`${dataAgendada}T${horaAgendada}:00`);
+      } else {
+        dataAgendadaFinal = new Date(dataAgendada);
+      }
     }
 
     const order = await prisma.pedido.create({
@@ -115,7 +125,7 @@ export async function createOrder(req: AuthRequest, res: Response) {
         modalidade,
         endereco,
         isUrgente: isUrgente ?? false,
-        dataAgendada: dataAgendada ? new Date(dataAgendada) : undefined,
+        dataAgendada: dataAgendadaFinal,
         valorEstimado,
         fotosUrls: fotosUrls ?? [],
         status: 'solicitado',
