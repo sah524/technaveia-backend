@@ -174,7 +174,6 @@ export async function acceptOrder(req: AuthRequest, res: Response) {
     const order = await prisma.pedido.findUnique({ where: { id } });
     if (!order) return res.status(404).json({ success: false, message: 'Pedido não encontrado' });
 
-    // Só pode aceitar pedidos solicitados e sem técnico (pool) ou atribuídos a este técnico
     if (order.status !== 'solicitado') {
       return res.status(400).json({ success: false, message: 'Este pedido não está disponível para aceite' });
     }
@@ -187,7 +186,34 @@ export async function acceptOrder(req: AuthRequest, res: Response) {
       data: { status: 'aceito', tecnicoId: tecnico.id },
     });
 
-    return res.json({ success: true, data: updated });
+    // Cria (ou reutiliza) conversa entre cliente e técnico para este pedido
+    let conversa = await prisma.conversa.findUnique({ where: { pedidoId: id } });
+
+    if (!conversa) {
+      conversa = await prisma.conversa.create({
+        data: {
+          pedidoId: id,
+          participantes: {
+            create: [
+              { usuarioId: order.clienteId },
+              { usuarioId: req.userId! },
+            ],
+          },
+        },
+      });
+
+      // Mensagem de sistema notificando o aceite
+      await prisma.mensagem.create({
+        data: {
+          conversaId: conversa.id,
+          remetenteId: req.userId!,
+          tipo: 'system',
+          conteudo: `Técnico aceitou o pedido ${order.numero}. Você já pode conversar aqui.`,
+        },
+      });
+    }
+
+    return res.json({ success: true, data: { ...updated, conversaId: conversa.id } });
   } catch {
     return res.status(500).json({ success: false, message: 'Erro ao aceitar pedido' });
   }

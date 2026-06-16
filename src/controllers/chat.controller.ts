@@ -23,6 +23,51 @@ export async function listConversations(req: AuthRequest, res: Response) {
   }
 }
 
+// ── GET /v1/conversations/by-order/:pedidoId ──────────────
+// Retorna (ou cria) a conversa associada a um pedido
+
+export async function getOrCreateConversationByOrder(req: AuthRequest, res: Response) {
+  try {
+    const pedidoId = Array.isArray(req.params.pedidoId)
+      ? req.params.pedidoId[0]
+      : req.params.pedidoId;
+
+    if (!pedidoId) {
+      return res.status(400).json({ success: false, message: 'pedidoId inválido' });
+    }
+
+    const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId } });
+    if (!pedido) return res.status(404).json({ success: false, message: 'Pedido não encontrado' });
+    if (!pedido.tecnicoId) {
+      return res.status(400).json({ success: false, message: 'Pedido ainda não tem técnico atribuído' });
+    }
+
+    // Busca técnico para obter o usuarioId
+    const tecnico = await prisma.tecnico.findUnique({ where: { id: pedido.tecnicoId } });
+    if (!tecnico) return res.status(404).json({ success: false, message: 'Técnico não encontrado' });
+
+    let conversa = await prisma.conversa.findUnique({ where: { pedidoId } });
+
+    if (!conversa) {
+      conversa = await prisma.conversa.create({
+        data: {
+          pedidoId,
+          participantes: {
+            create: [
+              { usuarioId: pedido.clienteId },
+              { usuarioId: tecnico.usuarioId },
+            ],
+          },
+        },
+      });
+    }
+
+    return res.json({ success: true, data: { conversaId: conversa.id } });
+  } catch {
+    return res.status(500).json({ success: false, message: 'Erro ao buscar conversa' });
+  }
+}
+
 // ── GET /v1/conversations/:id/messages ────────────────────
 
 export async function getMessages(req: AuthRequest, res: Response) {
