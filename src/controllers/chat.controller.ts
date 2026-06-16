@@ -13,6 +13,7 @@ export async function listConversations(req: AuthRequest, res: Response) {
       include: {
         participantes: { include: { usuario: { select: { id: true, nome: true, foto: true } } } },
         mensagens: { orderBy: { createdAt: 'desc' }, take: 1 },
+        pedido: { select: { status: true } },
       },
       orderBy: { updatedAt: 'desc' },
     });
