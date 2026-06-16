@@ -168,6 +168,22 @@ export async function createOrder(req: AuthRequest, res: Response) {
           actionUrl: `/orders/${order.id}`,
         });
       }
+    } else {
+      // Pool aberto: notifica todos os técnicos aprovados (limite 20 para não sobrecarregar)
+      const tecnicos = await prisma.tecnico.findMany({
+        where: { status: 'aprovado' },
+        select: { usuarioId: true },
+        take: 20,
+      });
+      for (const tec of tecnicos) {
+        await createNotification({
+          usuarioId: tec.usuarioId,
+          tipo: 'request',
+          titulo: 'Nova solicitação disponível!',
+          descricao: `${categoria} - ${subcategoria}. Abra a lista de solicitações para aceitar.`,
+          actionUrl: `/orders/${order.id}`,
+        });
+      }
     }
 
     return res.status(201).json({ success: true, data: order });
