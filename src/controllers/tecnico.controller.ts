@@ -10,7 +10,7 @@ export async function searchTechnicians(req: Request, res: Response) {
 
     const tecnicos = await prisma.tecnico.findMany({
       where: {
-        status: { in: ['aprovado', 'pendente'] },
+        status: 'aprovado',
         ...(modalidade && { modalidade: modalidade as any }),
         ...(avaliacao && { avaliacao: { gte: Number(avaliacao) } }),
         ...(categoria && {
