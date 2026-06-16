@@ -107,11 +107,21 @@ export async function sendMessage(req: AuthRequest, res: Response) {
 
     const { tipo = 'text', conteudo, metadados } = req.body;
 
+    if (!conteudo || !conteudo.trim()) {
+      return res.status(400).json({ success: false, message: 'Conteúdo da mensagem é obrigatório' });
+    }
+
+    // Verifica se a conversa existe
+    const conversa = await prisma.conversa.findUnique({ where: { id: conversaId } });
+    if (!conversa) {
+      return res.status(404).json({ success: false, message: 'Conversa não encontrada' });
+    }
+
     const mensagem = await prisma.mensagem.create({
       data: {
         conversaId,
         remetenteId: req.userId!,
-        tipo, conteudo, metadados,
+        tipo, conteudo: conteudo.trim(), metadados,
       },
     });
 
@@ -122,7 +132,8 @@ export async function sendMessage(req: AuthRequest, res: Response) {
     });
 
     return res.status(201).json({ success: true, data: mensagem });
-  } catch {
+  } catch (error) {
+    console.error('Erro ao enviar mensagem:', error);
     return res.status(500).json({ success: false, message: 'Erro ao enviar mensagem' });
   }
 }
