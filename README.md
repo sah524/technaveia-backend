@@ -226,6 +226,15 @@ A API está configurada para deploy no **Render**:
 - [ ] **Auditoria** — Log de ações administrativas
 - [ ] **2FA** — Autenticação de dois fatores para admins
 
+👥 Equipe de desenvolvimento
+
+Desenvolvido por estudantes da UCB (Universidade Católica de Brasília):
+
+Lia Costa (https://github.com/LiaCost)
+Sarah Silva (https://github.com/sah524)
+Taís Barbosa (https://github.com/TaisBds) 
+Andressa Castro (https://github.com/AndressaCst)
+
 ## 📄 Licença
 
 Projeto privado — Todos os direitos reservados.
